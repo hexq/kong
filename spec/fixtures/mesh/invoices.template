@@ -1,0 +1,44 @@
+> if nginx_user then
+user ${{NGINX_USER}};
+> end
+worker_processes ${{NGINX_WORKER_PROCESSES}};
+daemon ${{NGINX_DAEMON}};
+
+pid pids/nginx.pid;
+error_log ${{PROXY_ERROR_LOG}} ${{LOG_LEVEL}};
+
+> if nginx_optimizations then
+worker_rlimit_nofile ${{WORKER_RLIMIT}};
+> end
+
+events {
+> if nginx_optimizations then
+    worker_connections ${{WORKER_CONNECTIONS}};
+    multi_accept on;
+> end
+}
+
+http {
+    include 'nginx-kong.conf';
+
+    server {
+      listen 4000;
+
+      location / {
+        default_type application/json;
+
+        access_by_lua '
+        
+          local SERVICE_NAME = "invoices"
+
+          local response = {
+            service = SERVICE_NAME,
+            req_headers = ngx.req.get_headers()
+          }
+
+          ngx.say(require("cjson").encode(response))
+          ngx.exit(200)
+        ';
+      }
+    }
+}

@@ -58,6 +58,10 @@ cassandra_repl_factor = 1
 cassandra_data_centers = dc1:2,dc2:3
 cassandra_schema_consensus_timeout = 10000
 
+service_mesh = off
+service_name = NONE
+service_sidecar_port = NONE
+
 db_update_frequency = 5
 db_update_propagation = 0
 db_cache_ttl = 3600

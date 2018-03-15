@@ -279,6 +279,32 @@
                                   # `application/xml`.
 
 #------------------------------------------------------------------------------
+# SERVICE MESH
+#------------------------------------------------------------------------------
+
+# Kong can optionally act as a Service Mesh sidecar proxy in service-to-service
+# Microservice communication. When enabled, Kong will act as both a reverse
+# proxy and a forward proxy on the same listeners as `proxy_listen`.
+# 
+# Kong is platform agnostic so this mode can be  enabled for Kubernetes and 
+# every other platform as well.
+
+#service_mesh = off             # Determines if Service Mesh should be enabled.
+                                # If enabled, Kong will also act as a forward
+                                # proxy on the `proxy_listen` addresses.
+
+#service_name =                 # The service name whose this instance of Kong
+                                # is a sidecar proxy of. This name needs to
+                                # match a Service name in the database.
+
+#service_sidecar_port =         # The port of the sidecar service this Kong
+                                # instance is a sidecar proxy of. When a
+                                # request is being received to Kong to consume
+                                # the sidecar service, Kong will replace on the
+                                # fly the upstream address to:
+                                # 127.0.0.1:{service_sidecar_port}
+
+#------------------------------------------------------------------------------
 # DATASTORE
 #------------------------------------------------------------------------------
 

@@ -37,6 +37,10 @@ local DEBUG       = ngx.DEBUG
 local CACHE_ROUTER_OPTS = { ttl = 0 }
 local EMPTY_T = {}
 
+local MESH_SOURCE = "x-kong-mesh-source"
+local MESH_DEST = "x-kong-mesh-dest"
+local MESH_START_TIME = "x-kong-mesh-start-time"
+
 
 local router, router_version, router_err
 local api_router, api_router_version, api_router_err
@@ -417,6 +421,7 @@ return {
   },
   access = {
     before = function(ctx)
+
       -- ensure routers are up-to-date
       local cache = singletons.cache
 
@@ -583,6 +588,38 @@ return {
       var.upstream_uri    = match_t.upstream_uri
       var.upstream_host   = match_t.upstream_host
 
+      if singletons.configuration.service_mesh then
+        local headers = ngx.req.get_headers()
+
+        local source = headers[MESH_SOURCE]
+        local start_time = headers[MESH_START_TIME]
+        local now = ngx.now()
+
+        log(DEBUG, "[mesh] The proxy for service \"", singletons.configuration.service_name, 
+                   "\" received a request to consume service \"", service.name, 
+                   "\" at ", service.host, ":", service.port)
+        if source then
+          log(DEBUG, "[mesh] the request was originated ", now - start_time, 
+                     "ms ago by service \"", source, "\"")
+        end
+
+        ctx.mesh = EMPTY_T
+        if service.name == singletons.configuration.service_name then
+          -- We are consuming the sidecar proxy, overwrite the upstream
+          -- host to be localhost
+          ctx.mesh.ip = "127.0.0.1" -- Hardcode to 127.0.0.1
+          ctx.mesh.port = singletons.configuration.service_sidecar_port
+        else
+          -- We are consuming another mesh service, keep everything as it
+          -- is BUT skip plugin execution
+          ctx.mesh.skip_plugins = true
+
+          ngx.req.set_header(MESH_SOURCE, singletons.configuration.service_name)
+          ngx.req.set_header(MESH_DEST, service.name)
+          ngx.req.set_header(MESH_START_TIME, ngx.now())
+        end
+      end
+
       -- Keep-Alive and WebSocket Protocol Upgrade Headers
       if var.http_upgrade and lower(var.http_upgrade) == "websocket" then
         var.upstream_connection = "upgrade"
@@ -623,14 +660,22 @@ return {
         end
       end
 
-      local ok, err, errcode = balancer.execute(ctx.balancer_address)
-      if not ok then
-        if errcode == 500 then
-          err = "failed the initial dns/balancer resolve for '" ..
-                ctx.balancer_address.host .. "' with: "         ..
-                tostring(err)
+      if (ctx.mesh or EMPTY_T).ip then
+        -- local sidecar mesh node
+        ctx.balancer_address.ip = ctx.mesh.ip
+        ctx.balancer_address.port = ctx.mesh.port
+        ctx.balancer_address.hostname = "localhost"
+      else
+        -- do dns resolution
+        local ok, err, errcode = balancer.execute(ctx.balancer_address)
+        if not ok then
+          if errcode == 500 then
+            err = "failed the initial dns/balancer resolve for '" ..
+                  ctx.balancer_address.host .. "' with: "         ..
+                  tostring(err)
+          end
+          return responses.send(errcode, err)
         end
-        return responses.send(errcode, err)
       end
 
       do

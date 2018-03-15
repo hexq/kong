@@ -75,8 +75,10 @@ local set_current_peer = ngx_balancer.set_current_peer
 local set_timeouts     = ngx_balancer.set_timeouts
 local set_more_tries   = ngx_balancer.set_more_tries
 
+local EMPTY_T = {}
+
 local function load_plugins(kong_conf, dao)
-  local in_db_plugins, sorted_plugins = {}, {}
+  local in_db_plugins, sorted_plugins = EMPTY_T, EMPTY_T
 
   ngx_log(ngx_DEBUG, "Discovering used plugins")
 
@@ -139,7 +141,7 @@ local function load_plugins(kong_conf, dao)
     sorted_plugins[#sorted_plugins+1] = {
       name = "reports",
       handler = reports,
-      schema = {},
+      schema = EMPTY_T,
     }
   end
 
@@ -308,7 +310,7 @@ function Kong.balancer()
   local ctx = ngx.ctx
   local addr = ctx.balancer_address
   local tries = addr.tries
-  local current_try = {}
+  local current_try = EMPTY_T
   addr.try_count = addr.try_count + 1
   tries[addr.try_count] = current_try
 
@@ -332,13 +334,14 @@ function Kong.balancer()
       end
     end
 
-    local ok, err, errcode = balancer_execute(addr)
-    if not ok then
-      ngx_log(ngx_ERR, "failed to retry the dns/balancer resolver for ",
-              tostring(addr.host), "' with: ", tostring(err))
-      return ngx.exit(errcode)
+    if not (ctx.mesh or EMPTY_T).ip then -- Only if it's not service mesh
+      local ok, err, errcode = balancer_execute(addr)
+      if not ok then
+        ngx_log(ngx_ERR, "failed to retry the dns/balancer resolver for ",
+                tostring(addr.host), "' with: ", tostring(err))
+        return ngx.exit(errcode)
+      end
     end
-
   else
     -- first try, so set the max number of retries
     local retries = addr.retries
@@ -378,8 +381,12 @@ function Kong.rewrite()
   -- we're just using the iterator, as in this rewrite phase no consumer nor
   -- api will have been identified, hence we'll just be executing the global
   -- plugins
-  for plugin, plugin_conf in plugins_iterator(singletons.loaded_plugins, true) do
-    plugin.handler:rewrite(plugin_conf)
+  if (ctx.mesh or EMPTY_T).skip_plugins then
+    ngx_log(ngx_DEBUG, "[mesh] skipping plugin execution")
+  else
+    for plugin, plugin_conf in plugins_iterator(singletons.loaded_plugins, true) do
+      plugin.handler:rewrite(plugin_conf)
+    end
   end
 
   core.rewrite.after(ctx)
@@ -392,12 +399,17 @@ function Kong.access()
 
   ctx.delay_response = true
 
-  for plugin, plugin_conf in plugins_iterator(singletons.loaded_plugins, true) do
-    if not ctx.delayed_response then
-      local err = coroutine.wrap(plugin.handler.access)(plugin.handler, plugin_conf)
-      if err then
-        ctx.delay_response = false
-        return responses.send_HTTP_INTERNAL_SERVER_ERROR(err)
+
+  if (ctx.mesh or EMPTY_T).skip_plugins then
+    ngx_log(ngx_DEBUG, "[mesh] skipping plugin execution")
+  else
+    for plugin, plugin_conf in plugins_iterator(singletons.loaded_plugins, true) do
+      if not ctx.delayed_response then
+        local err = coroutine.wrap(plugin.handler.access)(plugin.handler, plugin_conf)
+        if err then
+          ctx.delay_response = false
+          return responses.send_HTTP_INTERNAL_SERVER_ERROR(err)
+        end
       end
     end
   end
@@ -415,8 +427,12 @@ function Kong.header_filter()
   local ctx = ngx.ctx
   core.header_filter.before(ctx)
 
-  for plugin, plugin_conf in plugins_iterator(singletons.loaded_plugins) do
-    plugin.handler:header_filter(plugin_conf)
+  if (ctx.mesh or EMPTY_T).skip_plugins then
+    ngx_log(ngx_DEBUG, "[mesh] skipping plugin execution")
+  else
+    for plugin, plugin_conf in plugins_iterator(singletons.loaded_plugins) do
+      plugin.handler:header_filter(plugin_conf)
+    end
   end
 
   core.header_filter.after(ctx)
@@ -424,8 +440,13 @@ end
 
 function Kong.body_filter()
   local ctx = ngx.ctx
-  for plugin, plugin_conf in plugins_iterator(singletons.loaded_plugins) do
-    plugin.handler:body_filter(plugin_conf)
+
+  if (ctx.mesh or EMPTY_T).skip_plugins then
+    ngx_log(ngx_DEBUG, "[mesh] skipping plugin execution")
+  else
+    for plugin, plugin_conf in plugins_iterator(singletons.loaded_plugins) do
+      plugin.handler:body_filter(plugin_conf)
+    end
   end
 
   core.body_filter.after(ctx)
@@ -433,8 +454,13 @@ end
 
 function Kong.log()
   local ctx = ngx.ctx
-  for plugin, plugin_conf in plugins_iterator(singletons.loaded_plugins) do
-    plugin.handler:log(plugin_conf)
+
+  if (ctx.mesh or EMPTY_T).skip_plugins then
+    ngx_log(ngx_DEBUG, "[mesh] skipping plugin execution")
+  else
+    for plugin, plugin_conf in plugins_iterator(singletons.loaded_plugins) do
+      plugin.handler:log(plugin_conf)
+    end
   end
 
   core.log.after(ctx)
@@ -445,7 +471,7 @@ function Kong.handle_error()
 end
 
 function Kong.serve_admin_api(options)
-  options = options or {}
+  options = options or EMPTY_T
 
   header["Access-Control-Allow-Origin"] = options.allow_origin or "*"
 

@@ -7,6 +7,9 @@ local ipairs       = ipairs
 local error        = error
 
 
+local EMPTY_T = {}
+
+
 -- Loads a plugin config from the datastore.
 -- @return plugin config table or an empty sentinel table in case of a db-miss
 local function load_plugin_into_memory(route_id,
@@ -74,7 +77,7 @@ local function load_plugin_configuration(route_id,
   end
 
   if plugin ~= nil and plugin.enabled then
-    local cfg       = plugin.config or {}
+    local cfg       = plugin.config or EMPTY_T
     cfg.api_id      = plugin.api_id
     cfg.route_id    = plugin.route_id
     cfg.service_id  = plugin.service_id
@@ -219,7 +222,7 @@ local function iter_plugins_for_req(loaded_plugins, access_or_cert_ctx)
   local ctx = ngx.ctx
 
   if not ctx.plugins_for_request then
-    ctx.plugins_for_request = {}
+    ctx.plugins_for_request = EMPTY_T
   end
 
   local plugin_iter_state = {

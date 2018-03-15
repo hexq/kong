@@ -71,6 +71,10 @@ local CONF_INFERENCES = {
   error_default_type = {enum = {"application/json", "application/xml",
                                 "text/html", "text/plain"}},
 
+  service_mesh = {typ = "boolean"},
+  service_name = {typ = "string"},
+  service_sidecar_port = {typ = "number"},
+
   database = {enum = {"postgres", "cassandra"}},
   pg_port = {typ = "number"},
   pg_password = {typ = "string"},
