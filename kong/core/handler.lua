@@ -588,14 +588,16 @@ return {
       var.upstream_uri    = match_t.upstream_uri
       var.upstream_host   = match_t.upstream_host
 
-      if singletons.configuration.service_mesh then
+      if singletons.configuration.mesh_listen then
         local headers = ngx.req.get_headers()
 
         local source = headers[MESH_SOURCE]
         local start_time = headers[MESH_START_TIME]
         local now = ngx.now()
 
-        log(DEBUG, "[mesh] The proxy for service \"", singletons.configuration.service_name, 
+        local mesh_service_name = singletons.configuration.mesh_service_name
+
+        log(DEBUG, "[mesh] The proxy for service \"", mesh_service_name, 
                    "\" received a request to consume service \"", service.name, 
                    "\" at ", service.host, ":", service.port)
         if source then
@@ -604,17 +606,17 @@ return {
         end
 
         ctx.mesh = EMPTY_T
-        if service.name == singletons.configuration.service_name then
+        if service.name == mesh_service_name then
           -- We are consuming the sidecar proxy, overwrite the upstream
           -- host to be localhost
           ctx.mesh.ip = "127.0.0.1" -- Hardcode to 127.0.0.1
-          ctx.mesh.port = singletons.configuration.service_sidecar_port
+          ctx.mesh.port = singletons.configuration.mesh_service_sidecar_port
         else
           -- We are consuming another mesh service, keep everything as it
           -- is BUT skip plugin execution
-          ctx.mesh.skip_plugins = true
+          -- ctx.mesh.skip_plugins = true
 
-          ngx.req.set_header(MESH_SOURCE, singletons.configuration.service_name)
+          ngx.req.set_header(MESH_SOURCE, mesh_service_name)
           ngx.req.set_header(MESH_DEST, service.name)
           ngx.req.set_header(MESH_START_TIME, ngx.now())
         end

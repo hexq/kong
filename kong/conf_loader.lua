@@ -71,9 +71,10 @@ local CONF_INFERENCES = {
   error_default_type = {enum = {"application/json", "application/xml",
                                 "text/html", "text/plain"}},
 
-  service_mesh = {typ = "boolean"},
-  service_name = {typ = "string"},
-  service_sidecar_port = {typ = "number"},
+  mesh_listen = {typ = "array"},
+  mesh_service_name = {typ = "string"},
+  mesh_service_sidecar_port = {typ = "number"},
+  mesh_source_proxy_plugins = {typ = "array"},
 
   database = {enum = {"postgres", "cassandra"}},
   pg_port = {typ = "number"},
@@ -200,6 +201,15 @@ local function check_and_infer(conf)
   -- custom validations
   ---------------------
 
+  if pl_stringx.strip(conf.mesh_listen[1]) ~= "off" then
+    if not conf.mesh_service_name then
+      errors[#errors+1] = "mesh_service_name must be specified"
+    end
+    if not conf.mesh_service_sidecar_port then
+      errors[#errors+1] = "mesh_service_sidecar_port must be specified"
+    end
+  end
+
   if conf.database == "cassandra" then
     if conf.cassandra_lb_policy == "DCAwareRoundRobin" and
       not conf.cassandra_local_datacenter then
@@ -228,7 +238,8 @@ local function check_and_infer(conf)
     end
   end
 
-  if (table.concat(conf.proxy_listen, ",") .. " "):find("%sssl[%s,]") then
+  if (table.concat(conf.proxy_listen, ",") .. " "):find("%sssl[%s,]") or 
+     (table.concat(conf.mesh_listen, ",") .. " "):find("%sssl[%s,]") then
     if conf.ssl_cert and not conf.ssl_cert_key then
       errors[#errors+1] = "ssl_cert_key must be specified"
     elseif conf.ssl_cert_key and not conf.ssl_cert then
@@ -586,6 +597,21 @@ local function load(path, custom_conf)
     for _, listener in ipairs(conf.admin_listeners) do
       if listener.ssl == true then
         conf.admin_ssl_enabled = true
+        break
+      end
+    end
+
+    conf.mesh_listeners, err = parse_listeners(conf.mesh_listen)
+    if err then
+      return nil, "mesh_listen " .. err
+    end
+
+    setmetatable(conf.mesh_listeners, mt)  -- do not pass on, parse again
+    conf.mesh_ssl_enabled = false
+
+    for _, listener in ipairs(conf.mesh_listeners) do
+      if listener.ssl == true then
+        conf.mesh_ssl_enabled = true
         break
       end
     end

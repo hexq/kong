@@ -66,6 +66,9 @@ server {
 > for i = 1, #proxy_listeners do
     listen $(proxy_listeners[i].listener);
 > end
+> for i = 1, #mesh_listeners do
+    listen $(mesh_listeners[i].listener);
+> end
     error_page 400 404 408 411 412 413 414 417 /kong_error_handler;
     error_page 500 502 503 504 /kong_error_handler;
 
@@ -74,7 +77,7 @@ server {
 
     client_body_buffer_size ${{CLIENT_BODY_BUFFER_SIZE}};
 
-> if proxy_ssl_enabled then
+> if proxy_ssl_enabled or mesh_ssl_enabled then
     ssl_certificate ${{SSL_CERT}};
     ssl_certificate_key ${{SSL_CERT_KEY}};
     ssl_protocols TLSv1.1 TLSv1.2;

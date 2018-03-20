@@ -9,10 +9,14 @@ describe("Configuration loader", function()
     assert.equal("auto", conf.nginx_worker_processes)
     assert.same({"127.0.0.1:8001", "127.0.0.1:8444 ssl"}, conf.admin_listen)
     assert.same({"0.0.0.0:8000", "0.0.0.0:8443 ssl"}, conf.proxy_listen)
+    assert.same({"off"}, conf.mesh_listen)
     assert.is_nil(conf.ssl_cert) -- check placeholder value
     assert.is_nil(conf.ssl_cert_key)
     assert.is_nil(conf.admin_ssl_cert)
     assert.is_nil(conf.admin_ssl_cert_key)
+    assert.is_nil(conf.mesh_service_name)
+    assert.is_nil(conf.mesh_service_sidecar_port)
+    assert.same({}, conf.mesh_source_proxy_plugins)
     assert.is_nil(getmetatable(conf))
   end)
   it("loads a given file, with higher precedence", function()
@@ -69,8 +73,11 @@ describe("Configuration loader", function()
     assert.True(conf.plugins["hello-world"])
     assert.True(conf.plugins["another-one"])
   end)
-  it("extracts flags, ports and listen ips from proxy_listen/admin_listen", function()
-    local conf = assert(conf_loader())
+  it("extracts flags, ports and listen ips from proxy_listen/admin_listen/mesh_listen", function()
+    local conf = assert(conf_loader(nil, {
+      mesh_listen = "127.0.0.1:4000, 127.0.0.1:4443 ssl"
+    }))
+
     assert.equal("127.0.0.1", conf.admin_listeners[1].ip)
     assert.equal(8001, conf.admin_listeners[1].port)
     assert.equal(false, conf.admin_listeners[1].ssl)
@@ -94,6 +101,18 @@ describe("Configuration loader", function()
     assert.equal(true, conf.proxy_listeners[2].ssl)
     assert.equal(false, conf.proxy_listeners[2].http2)
     assert.equal("0.0.0.0:8443 ssl", conf.proxy_listeners[2].listener)
+
+    assert.equal("127.0.0.1", conf.mesh_listeners[1].ip)
+    assert.equal(4000, conf.mesh_listeners[1].port)
+    assert.equal(false, conf.mesh_listeners[1].ssl)
+    assert.equal(false, conf.mesh_listeners[1].http2)
+    assert.equal("127.0.0.1:4000", conf.mesh_listeners[1].listener)
+
+    assert.equal("127.0.0.1", conf.mesh_listeners[2].ip)
+    assert.equal(4443, conf.mesh_listeners[2].port)
+    assert.equal(true, conf.mesh_listeners[2].ssl)
+    assert.equal(false, conf.mesh_listeners[2].http2)
+    assert.equal("127.0.0.1:4443 ssl", conf.mesh_listeners[2].listener)
   end)
   it("extracts ssl flags properly when hostnames contain them", function()
     local conf
@@ -115,28 +134,34 @@ describe("Configuration loader", function()
     assert.equal("ssl_myname.com", conf.admin_listeners[1].ip)
     assert.equal(true, conf.admin_listeners[1].ssl)
   end)
-  it("extracts 'off' from proxy_listen/admin_listen", function()
+  it("extracts 'off' from proxy_listen/admin_listen/mesh_listen", function()
     local conf
     conf = assert(conf_loader(nil, {
       proxy_listen = "off",
       admin_listen = "off",
+      mesh_listen = "off",
     }))
     assert.same({}, conf.proxy_listeners)
     assert.same({}, conf.admin_listeners)
+    assert.same({}, conf.mesh_listeners)
     -- off with multiple entries
     conf = assert(conf_loader(nil, {
       proxy_listen = "off, 0.0.0.0:9000",
       admin_listen = "off, 127.0.0.1:9001",
+      mesh_listen = "off, 127.0.0.1:4000",
     }))
     assert.same({}, conf.proxy_listeners)
+    assert.same({}, conf.admin_listeners)
     assert.same({}, conf.admin_listeners)
     -- not off with names containing 'off'
     conf = assert(conf_loader(nil, {
       proxy_listen = "offshore.com:9000",
       admin_listen = "offshore.com:9001",
+      mesh_listen = "offshore.com:9001",
     }))
     assert.same("offshore.com", conf.proxy_listeners[1].ip)
     assert.same("offshore.com", conf.admin_listeners[1].ip)
+    assert.same("offshore.com", conf.mesh_listeners[1].ip)
   end)
   it("attaches prefix paths", function()
     local conf = assert(conf_loader())

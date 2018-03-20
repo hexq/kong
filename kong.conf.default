@@ -283,26 +283,47 @@
 #------------------------------------------------------------------------------
 
 # Kong can optionally act as a Service Mesh sidecar proxy in service-to-service
-# Microservice communication. When enabled, Kong will act as both a reverse
-# proxy and a forward proxy on the same listeners as `proxy_listen`.
+# Microservice communication. When enabled Kong will act as a forward proxy on 
+# the addresses specified at `mesh_listen`.
 # 
 # Kong is platform agnostic so this mode can be  enabled for Kubernetes and 
 # every other platform as well.
 
-#service_mesh = off             # Determines if Service Mesh should be enabled.
-                                # If enabled, Kong will also act as a forward
-                                # proxy on the `proxy_listen` addresses.
+#mesh_listen = off
+                         # Comma-separated list of addresses and ports on
+                         # which the forward proxy server should listen.
+                         #
+                         # For example: 
+                         # `mesh_listen = 127.0.0.1:4000, 127.0.0.1:4443 ssl`
+                         #
+                         # When specified this property enables Service Mesh
+                         # mode in Kong. A sidecar service wanting to consume 
+                         # another service will use this address for the 
+                         # outgoing proxy request. If SSL is enabled, this 
+                         # port will use the same certificate and key specified 
+                         # in the `ssl_cert` and `ssl_cert_key` properties.
+                         #
+                         # By default this value is set to `off`, thus
+                         # disabling the mesh proxy port for this node.
 
-#service_name =                 # The service name whose this instance of Kong
+#mesh_service_name =            # The service name whose this instance of Kong
                                 # is a sidecar proxy of. This name needs to
                                 # match a Service name in the database.
 
-#service_sidecar_port =         # The port of the sidecar service this Kong
+#mesh_service_sidecar_port =    # The port of the sidecar service this Kong
                                 # instance is a sidecar proxy of. When a
                                 # request is being received to Kong to consume
                                 # the sidecar service, Kong will replace on the
                                 # fly the upstream address to:
                                 # 127.0.0.1:{service_sidecar_port}
+
+#mesh_source_proxy_plugins =    # Comma separated list of plugin names that
+                                # will be executed on the outgoing proxy from
+                                # the source proxy and will not be executed
+                                # at the destination proxy.
+                                # By default all plugins are being executed by 
+                                # the destination proxy and skipped on the 
+                                # source proxy.
 
 #------------------------------------------------------------------------------
 # DATASTORE

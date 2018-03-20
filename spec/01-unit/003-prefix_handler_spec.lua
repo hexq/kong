@@ -66,12 +66,16 @@ describe("NGINX conf compiler", function()
       local conf = assert(conf_loader(helpers.test_conf_path, {
         mem_cache_size = "128k",
         proxy_listen = "0.0.0.0:80",
-        admin_listen = "127.0.0.1:8001"
+        admin_listen = "127.0.0.1:8001",
+        mesh_listen = "127.0.0.1:4000",
+        mesh_service_name = "hello",
+        mesh_service_sidecar_port = 5000,
       }))
       local kong_nginx_conf = prefix_handler.compile_kong_conf(conf)
       assert.matches("lua_shared_dict kong_cache%s+128k;", kong_nginx_conf)
       assert.matches("listen 0.0.0.0:80;", kong_nginx_conf, nil, true)
       assert.matches("listen 127.0.0.1:8001;", kong_nginx_conf, nil, true)
+      assert.matches("listen 127.0.0.1:4000;", kong_nginx_conf, nil, true)
     end)
     it("enables HTTP/2", function()
       local conf = assert(conf_loader(helpers.test_conf_path, {
@@ -87,12 +91,17 @@ describe("NGINX conf compiler", function()
       conf = assert(conf_loader(helpers.test_conf_path, {
         proxy_listen = "0.0.0.0:9000, 0.0.0.0:9443 http2 ssl",
         admin_listen = "127.0.0.1:9001, 127.0.0.1:8444 ssl",
+        mesh_listen = "127.0.0.1:4000, 127.0.0.1:4443 ssl",
+        mesh_service_name = "hello",
+        mesh_service_sidecar_port = 5000,
       }))
       kong_nginx_conf = prefix_handler.compile_kong_conf(conf)
       assert.matches("listen 0.0.0.0:9000;", kong_nginx_conf, nil, true)
       assert.matches("listen 0.0.0.0:9443 ssl http2;", kong_nginx_conf, nil, true)
       assert.matches("listen 127.0.0.1:9001;", kong_nginx_conf, nil, true)
       assert.matches("listen 127.0.0.1:8444 ssl;", kong_nginx_conf, nil, true)
+      assert.matches("listen 127.0.0.1:4000;", kong_nginx_conf, nil, true)
+      assert.matches("listen 127.0.0.1:4443 ssl;", kong_nginx_conf, nil, true)
 
       conf = assert(conf_loader(helpers.test_conf_path, {
         proxy_listen = "0.0.0.0:9000, 0.0.0.0:9443 ssl",
@@ -117,6 +126,9 @@ describe("NGINX conf compiler", function()
       local conf = assert(conf_loader(helpers.test_conf_path, {
         proxy_listen = "127.0.0.1:8000",
         admin_listen = "127.0.0.1:8001",
+        mesh_listen = "127.0.0.1:4000",
+        mesh_service_name = "hello",
+        mesh_service_sidecar_port = 5000,
       }))
       local kong_nginx_conf = prefix_handler.compile_kong_conf(conf)
       assert.not_matches("listen %d+%.%d+%.%d+%.%d+:%d+ ssl;", kong_nginx_conf)
